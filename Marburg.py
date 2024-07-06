@@ -44,18 +44,24 @@ def flatten_2d_array(array):
     return [element for row in array for element in row]
 
 rootBestMove = (0, 0)
+TT = [(None, None) for _ in range(8388608)]
 nodes = 0
+
+class TimeoutException(Exception):
+    pass
 
 def negamax(PopIt, depth, ply, alpha, beta):
     global rootBestMove, nodes, remaining_time, hbtm, start_time
 
     if (depth > 1) and (1000 * (time.time() - start_time) > (remaining_time / hbtm)):
-        raise Exception()
+        raise TimeoutException()
     if pt.isCheckMate(PopIt) and ply != 0:
         return -30000 + ply
     if depth == 0:
         return stmEval(PopIt)
 
+    TTHash = hash(tuple(flatten_2d_array(PopIt.board))) % 8388608
+    TT_row, TT_pops = TT[TTHash]
     maxScore = -100000
     row = 0
     breakOut = False
@@ -68,11 +74,7 @@ def negamax(PopIt, depth, ply, alpha, beta):
         row += 1
 
     # Order moves
-    if ply == 0 and rootBestMove is not None:
-        brow, bnumPops = rootBestMove
-        moves.sort(key=lambda move: (move[0] != brow, move[1] != bnumPops))
-    else:
-        brow, bnumPops = None, None
+    moves.sort(key=lambda move: (move[0] != TT_row, move[1] != TT_pops))
 
     for move in moves:
         row, numberOfPops = move
@@ -82,6 +84,7 @@ def negamax(PopIt, depth, ply, alpha, beta):
 
         if score > maxScore:
             maxScore = score
+            TT[TTHash] = (row, numberOfPops)
             if score > alpha:
                 alpha = score
                 if score >= beta:
@@ -94,6 +97,7 @@ def negamax(PopIt, depth, ply, alpha, beta):
             break
 
     return maxScore
+
 
 def get_best_move(PopIt):
     global nodes, rootBestMove, sbtm, remaining_time, start_time
@@ -114,7 +118,7 @@ def get_best_move(PopIt):
 
             if elapsed > (remaining_time / sbtm):
                 break
-    except Exception as e:
+    except TimeoutException as e:
        return
 
 def bench(Pop, maxDepth):
@@ -158,7 +162,10 @@ def uci():
    global start_time, remaining_time, rootBestMove
    Pop = pt.PopIt()
    while True:
-      line = input()
+      try:
+          line = input()
+      except EOFError:
+          return
       if line == "upi":
          print("id name Marburg")
          print("id author Dragjon")
